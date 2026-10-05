@@ -1,161 +1,134 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import {
-  Image, Video, FileText, Play, Camera, MapPin, Calendar,
-  Search, ExternalLink, BookOpen
-} from 'lucide-react';
+import { Image as ImageIcon, Camera, Video, Newspaper, Ship, Search, X, MapPin, ArrowRight, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { mediaItems, MediaItem } from '@/lib/data';
+import Lightbox from '@/components/Lightbox';
+import { qs, type ContentCard } from '@/lib/api';
+import { useApi } from '@/lib/useApi';
+import { useAppStore } from '@/lib/store';
+import { useRegionLabel, useT } from '@/lib/i18n';
+import { imgUrl } from '@/lib/format';
+import { EmptyState, ErrorState, MediaCard, ParallaxSection, RevealOnScroll, Segmented, SectionHeader, Skeleton, SmartImage } from '@/components/ui';
 
-const tabs = ['All', 'Photos', 'Videos', 'Press Releases'];
-
-function MediaCard({ item, index }: { item: MediaItem; index: number }) {
-  const typeIcon = item.type === 'video' ? <Play size={14} /> :
-    item.type === 'press_release' ? <FileText size={14} /> : <Camera size={14} />;
-  const typeLabel = item.type === 'press_release' ? 'Press Release' :
-    item.type === 'video' ? 'Video' : 'Photo Gallery';
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
-      whileHover={{ y: -4 }}
-      className="glass-card rounded-2xl overflow-hidden group cursor-pointer"
-    >
-      {/* Thumbnail */}
-      <div className="relative h-48 overflow-hidden">
-        <img
-          src={item.thumbnail}
-          alt={item.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          loading="lazy"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(2,11,24,0.92)] via-[rgba(2,11,24,0.2)] to-transparent" />
-        {/* Type badge */}
-        <div className="absolute top-3 left-3">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[rgba(0,0,0,0.55)] border border-[rgba(255,255,255,0.12)] text-white">
-            {typeIcon} {typeLabel}
-          </span>
-        </div>
-        {/* Video play / count overlay */}
-        {item.type === 'video' && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="w-14 h-14 rounded-full bg-[rgba(0,180,216,0.85)] flex items-center justify-center shadow-lg">
-              <Play size={22} className="text-white ml-1" fill="white" />
-            </div>
-          </div>
-        )}
-        {item.duration && (
-          <span className="absolute bottom-3 right-3 px-1.5 py-0.5 rounded bg-[rgba(0,0,0,0.7)] text-[10px] text-white font-mono">
-            {item.duration}
-          </span>
-        )}
-        {item.image_count && (
-          <span className="absolute bottom-3 right-3 px-1.5 py-0.5 rounded bg-[rgba(0,0,0,0.7)] text-[10px] text-white">
-            {item.image_count} photos
-          </span>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        <h3 className="font-semibold text-[#CAF0F8] text-sm leading-snug mb-1.5 line-clamp-2 group-hover:text-white transition-colors">
-          {item.title}
-        </h3>
-        <p className="text-xs text-[rgba(202,240,248,0.45)] line-clamp-2 mb-3">{item.description}</p>
-        <div className="flex items-center justify-between text-[10px] text-[rgba(144,224,239,0.4)]">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1"><MapPin size={10} />{item.location.split(',')[0]}</span>
-            <span>·</span>
-            <span className="flex items-center gap-1"><Calendar size={10} />{new Date(item.date).getFullYear()}</span>
-          </div>
-          {item.photographer && <span className="text-[rgba(144,224,239,0.3)]">{item.photographer.split('/')[0]}</span>}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
+type Tab = 'all' | 'photo' | 'video' | 'expedition' | 'press_release';
+interface MediaResp { total: number; items: ContentCard[]; counts: Record<string, number> }
 
 export default function MediaHubPage() {
-  const [activeTab, setActiveTab] = useState('All');
-  const [searchQ, setSearchQ] = useState('');
+  const t = useT();
+  const region = useRegionLabel();
+  const low = useAppStore((s) => s.lowBandwidth);
+  const [tab, setTab] = useState<Tab>('all');
+  const [q, setQ] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const strip = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => {
-    return mediaItems.filter((item) => {
-      const matchTab = activeTab === 'All' ||
-        (activeTab === 'Photos' && item.type === 'photo') ||
-        (activeTab === 'Videos' && item.type === 'video') ||
-        (activeTab === 'Press Releases' && item.type === 'press_release');
-      const matchSearch = !searchQ ||
-        item.title.toLowerCase().includes(searchQ.toLowerCase()) ||
-        item.location.toLowerCase().includes(searchQ.toLowerCase()) ||
-        item.tags.some((t) => t.toLowerCase().includes(searchQ.toLowerCase()));
-      return matchTab && matchSearch;
-    });
-  }, [activeTab, searchQ]);
+  const media = useApi<MediaResp>(`/api/media${qs({ media_type: tab === 'all' || tab === 'expedition' ? '' : tab, q: debounced })}`);
+  const exps = useApi<ContentCard[]>('/api/expeditions');
+  const featured = exps.data?.[0];
+  const items = useMemo(() => media.data?.items || [], [media.data]);
+  const viewable = useMemo(() => items.filter((i) => i.content_type !== 'press_release'), [items]);
+
+  const onSearch = (v: string) => {
+    setQ(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDebounced(v), 300);
+  };
+  const scrollStrip = (dir: number) => strip.current?.scrollBy({ left: dir * 380, behavior: 'smooth' });
+  const counts = media.data?.counts || {};
 
   return (
-    <AppShell>
-      <div className="p-6 max-w-screen-xl">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <div className="flex items-center gap-2 text-xs text-[rgba(144,224,239,0.4)] mb-2">
-            <Image size={12} /> Media Hub
+    <AppShell fullBleed>
+      {/* Cinematic featured expedition */}
+      {featured ? (
+        <ParallaxSection image={imgUrl(featured.thumbnail, 2000, low)} height="min-h-[440px] sm:min-h-[520px]" speed={0.3}>
+          <div className="mx-auto flex min-h-[440px] max-w-screen-2xl items-end px-4 pb-10 sm:min-h-[520px] sm:px-8">
+            <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}
+              className="glass-panel max-w-xl rounded-3xl p-6 sm:p-8">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-300">{t('media.featured')}</p>
+              <h1 className="font-space text-3xl font-bold uppercase leading-tight text-white sm:text-4xl">{featured.title}</h1>
+              <p className="mt-3 text-sm leading-relaxed text-ice-200">{featured.description}</p>
+              <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ice-300">
+                <span className="flex items-center gap-1.5"><MapPin size={12} aria-hidden />Maitri Station · {region(featured.region)}</span>
+                {featured.extra?.duration_days && <span className="flex items-center gap-1.5"><Calendar size={12} aria-hidden />{featured.extra.duration_days} days</span>}
+                {featured.extra?.members && <span className="flex items-center gap-1.5"><Users size={12} aria-hidden />{featured.extra.members} members</span>}
+              </p>
+              <Link href={`/media/expeditions/${featured.id}`} className="btn-primary mt-5">{t('media.exploreExpedition')} <ArrowRight size={15} aria-hidden /></Link>
+            </motion.div>
           </div>
-          <h1 className="font-space text-3xl font-bold text-gradient-white mb-2">Media Gallery</h1>
-          <p className="text-sm text-[rgba(202,240,248,0.5)]">
-            Photos, videos and stories from the frontlines of polar research.
-          </p>
-        </motion.div>
+        </ParallaxSection>
+      ) : <Skeleton className="h-[440px] rounded-none" />}
 
-        {/* Search + Tabs row */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-5">
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl polar-input">
-            <Search size={15} className="text-[#48CAE4] shrink-0" />
-            <input
-              type="text"
-              value={searchQ}
-              onChange={(e) => setSearchQ(e.target.value)}
-              placeholder="Search media..."
-              className="bg-transparent outline-none text-xs text-[#CAF0F8] placeholder-[rgba(144,224,239,0.35)] w-44"
-            />
+      <div className="mx-auto max-w-screen-2xl space-y-8 px-4 py-8 sm:px-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300/80"><ImageIcon size={13} aria-hidden /> {t('nav.media')}</p>
+            <h2 className="font-space text-3xl font-bold text-gradient-white">{t('media.title')}</h2>
+            <p className="mt-1 text-sm text-ice-400">{t('media.subtitle')}</p>
           </div>
-          <div className="flex items-center gap-1 bg-[rgba(6,22,40,0.5)] rounded-xl p-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap
-                  ${activeTab === tab
-                    ? 'bg-[rgba(0,180,216,0.2)] text-[#48CAE4] border border-[rgba(0,180,216,0.25)]'
-                    : 'text-[rgba(144,224,239,0.5)] hover:text-[#90E0EF]'
-                  }`}
-              >
-                {tab === 'Photos' && <Camera size={12} />}
-                {tab === 'Videos' && <Video size={12} />}
-                {tab === 'Press Releases' && <FileText size={12} />}
-                {tab}
-              </button>
-            ))}
+          <div className="polar-input flex w-full items-center gap-2 py-2.5 sm:w-72">
+            <Search size={15} className="shrink-0 text-cyan-300" aria-hidden />
+            <label htmlFor="media-q" className="sr-only">Search media</label>
+            <input id="media-q" value={q} onChange={(e) => onSearch(e.target.value)} placeholder="Search media…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ice-500" />
+            {q && <button onClick={() => onSearch('')} aria-label="Clear"><X size={14} className="text-ice-500" /></button>}
           </div>
         </div>
 
-        {/* Grid */}
-        {filtered.length > 0 ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((item, i) => (
-              <MediaCard key={item.id} item={item} index={i} />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Image size={40} className="text-[rgba(0,180,216,0.2)] mb-3" />
-            <p className="text-[rgba(202,240,248,0.5)]">No media items found</p>
-          </div>
+        <Segmented label="Media type" value={tab} onChange={setTab}
+          options={[
+            { value: 'all', label: t('media.tabs.all') },
+            { value: 'photo', label: t('media.tabs.photos'), icon: Camera, count: counts.photo },
+            { value: 'video', label: t('media.tabs.videos'), icon: Video, count: counts.video },
+            { value: 'expedition', label: t('media.tabs.expeditions'), icon: Ship, count: exps.data?.length },
+            { value: 'press_release', label: t('media.tabs.press'), icon: Newspaper, count: counts.press_release },
+          ]} />
+
+        {/* Horizontal expedition strip */}
+        {(tab === 'all' || tab === 'expedition') && exps.data && exps.data.length > 0 && (
+          <section aria-labelledby="exp-strip">
+            <SectionHeader id="exp-strip" icon={Ship} title={t('media.tabs.expeditions')} subtitle="Journey timelines linking media to the science it produced"
+              action={<div className="hidden gap-1.5 sm:flex"><button onClick={() => scrollStrip(-1)} className="rounded-lg border border-white/10 p-1.5 text-ice-300 hover:bg-white/5" aria-label="Scroll left"><ChevronLeft size={16} /></button><button onClick={() => scrollStrip(1)} className="rounded-lg border border-white/10 p-1.5 text-ice-300 hover:bg-white/5" aria-label="Scroll right"><ChevronRight size={16} /></button></div>} />
+            <div ref={strip} className="scrollbar-none -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-8 sm:px-8">
+              {exps.data.flatMap((e) => [e, ...((e.extra?.stages as { key: string; title: string; image: string; description: string }[]) || []).map((s) => ({ ...e, id: `${e.id}#${s.key}`, title: s.title, thumbnail: s.image, description: s.description, stage: true }))])
+                .map((e, i) => (
+                  <motion.div key={e.id} initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: Math.min(i, 6) * 0.05 }}
+                    className="w-[78vw] shrink-0 snap-start sm:w-[340px]">
+                    <Link href={`/media/expeditions/${e.id.split('#')[0]}${e.id.includes('#') ? `#${e.id.split('#')[1]}` : ''}`} className="glass-panel glass-panel-hover group relative block h-60 overflow-hidden rounded-2xl">
+                      <SmartImage src={e.thumbnail} alt="" width={700} className="h-full w-full object-cover transition-transform duration-[1200ms] group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(2,11,24,0.95)] via-[rgba(2,11,24,0.2)] to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-lime-300">{'stage' in e ? 'Expedition stage' : 'Expedition'}</p>
+                        <h3 className="font-space text-lg font-semibold text-white">{e.title}</h3>
+                        <p className="line-clamp-2 text-xs text-ice-300">{e.description}</p>
+                      </div>
+                    </Link>
+                  </motion.div>
+                ))}
+            </div>
+          </section>
         )}
+
+        {tab !== 'expedition' && (
+          <section aria-label="Media gallery">
+            {media.error ? <ErrorState message={media.error.message} onRetry={media.reload} /> :
+              media.loading && !media.data ? <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">{[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <Skeleton key={i} className={`mb-4 rounded-2xl ${i % 3 ? 'h-56' : 'h-80'}`} />)}</div> :
+                items.length === 0 ? <EmptyState icon={ImageIcon} title={t('common.noResults')} hint="Try another search term." /> : (
+                  <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+                    {items.map((m, i) => (
+                      <MediaCard key={m.id} item={m} index={i} tall={i % 5 === 0 && m.content_type === 'photo'}
+                        onOpen={m.content_type === 'press_release' ? undefined : (c) => setOpen(viewable.findIndex((v) => v.id === c.id))} />
+                    ))}
+                  </div>
+                )}
+          </section>
+        )}
+
+        <RevealOnScroll className="text-center text-[11px] text-ice-500">{t('common.sampleNotice')} Photographs: Unsplash (illustrative).</RevealOnScroll>
       </div>
+      <Lightbox items={viewable} index={open} onClose={() => setOpen(null)} onIndex={setOpen} />
     </AppShell>
   );
 }

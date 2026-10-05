@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PolarSync — SIH 2026 (SIH26063)
 
-## Getting Started
+**Integrated Polar Science Outreach, Knowledge Repository and Media Dissemination Portal.**
+One gateway for India's polar research, media and outreach, with AI-assisted discovery and human-reviewed publishing.
 
-First, run the development server:
+> Prototype. All scientific records, people and metrics are representative sample data. Station names, coordinates and dates are public facts. Photographs are illustrative (Unsplash).
+
+## Quick start
+
+Requirements: Node 20+, Python 3.10+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run setup:backend          # creates backend/.venv and installs FastAPI + numpy
+npm run dev:all                # API on :8000 and web app on :3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. The first backend start creates `backend/data/polarsync.db` and seeds it (about 10 s).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Optional neural embeddings (better semantic search, about 1 GB download):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run setup:backend -- --ml  # CPU torch + sentence-transformers (all-MiniLM-L6-v2)
+```
 
-## Learn More
+If these packages are missing, the API automatically falls back to a local LSA embedding model, so search still works offline.
 
-To learn more about Next.js, take a look at the following resources:
+Other commands:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | Purpose |
+|---|---|
+| `npm run backend` | API only (`http://localhost:8000/docs` has the OpenAPI UI) |
+| `npm run dev` | Web app only (expects the API on :8000) |
+| `npm run check:routes` | Smoke test: every page and key API returns 200 |
+| `POLARSYNC_RESET=1 npm run backend` | Start from a fresh database |
+| `POLARSYNC_EMBEDDER=lsa` | Force the LSA embedder |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Demo accounts
 
-## Deploy on Vercel
+| Role | Email | Password |
+|---|---|---|
+| Contributor | `alex@polarsync.in` | `polar123` |
+| Admin / curator | `admin@polarsync.in` | `admin123` |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The sign-in page also has one-click buttons for both. To restore the seed data between demo runs, use Command Center → **Reset demo data**.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Demo flow
+
+1. **Landing**: search "Antarctic ice changes", or press **Ctrl K** anywhere.
+2. **AI search**: shows the pipeline steps, the AI Insight with quoted evidence, results grouped by type with relevance scores, and "Why this result?" score breakdowns. Toggle *Keyword only* to compare.
+3. Open **Antarctic Sea Ice Extent Dataset** to see metadata, provenance, linked locations and related records.
+4. **Polar Map**: click Maitri, then **Explore station** to see the papers, datasets, media and stories linked to it.
+5. **Media**: lightbox, then **Indian Antarctic Expedition 2026** for the timeline story.
+6. **Education**: the scroll story, the Maitri virtual tour (hotspots), and the quiz (score and explorer level).
+7. **Contributor** (Alex): Upload, choose *Sample paper*, attach a file, **Run AI analysis**, accept or edit tags, then **Submit**.
+8. **Admin** (Kavya): Review Queue, edit or approve the record (**Approve & Publish**), then **Find in search**. The new record is indexed immediately.
+9. Switch the language to **தமிழ்**, and toggle **Low bandwidth mode** (Wi-Fi icon).
+
+## Architecture
+
+```
+Next.js 16 (App Router, React 19, Tailwind 4, Framer Motion, Leaflet)
+   │  /api/* and /files/* proxied via next.config rewrites
+FastAPI (backend/app)
+   ├── api/        auth · content · repository · media · expeditions · locations
+   │               search · ai · uploads · submissions · reviews · dashboard · analytics
+   ├── services/   embeddings (MiniLM | LSA) · search_service (hybrid index) · ai_service · text (vocabulary)
+   ├── database/   SQLite repository layer (db.py) · seed data
+   ├── models/     domain models · schemas/ request models
+   └── data/       polarsync.db · uploads/   (git-ignored)
+```
+
+**Hybrid search.** Score = 0.4 × semantic (cosine over embeddings) + 0.4 × BM25 keyword + 0.2 × metadata intent (region / type / research area, plus recency and popularity). Queries are expanded with a 40-concept polar-science vocabulary.
+
+**AI service.** All outputs are computed from the submitted text; no generative LLM is used.
+- `summarize()`: extractive, using embedding centrality.
+- `generate_tags()`: controlled vocabulary plus TF-IDF keyphrases.
+- `classify_content()`: type, region and research area with confidence scores.
+- `create_embedding()`.
+- Duplicate detection and quality checks.
+
+Every output is a suggestion that a curator must approve.
+
+## Known limitations
+
+- Authentication is a prototype token session (no SSO, password reset or rate limiting).
+- Sample videos have no media files: the player shows a labelled cinematic preview. Uploaded MP4/WebM files do play.
+- Uploaded files are served from `/files` without per-record access control.
+- Text extraction covers PDF, TXT, CSV and JSON. Images and videos are analysed from their metadata only.
+- Engagement analytics include a simulated 60-day baseline, flagged in the UI. Content counts are live.
+- Hindi translation is partial (navigation and landing). Tamil covers the UI, the main story and the polar quiz. Records stay in English.
+- SQLite with in-memory exact vector search is sized for the prototype. The repository layer and index class are the swap points for PostgreSQL / pgvector or FAISS.

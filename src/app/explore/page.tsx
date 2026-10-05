@@ -19,8 +19,8 @@ const sections = [
     icon: Database,
     title: 'Repository',
     desc: 'Browse verified research papers, datasets, and technical reports from India\'s polar science programs.',
-    image: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80',
-    badge: '400+ Items',
+    image: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800&q=80',
+    badge: 'Papers · Data',
     badgeColor: 'text-blue-300 bg-blue-500/10 border-blue-500/20',
   },
   {
@@ -29,7 +29,7 @@ const sections = [
     title: 'Media Gallery',
     desc: 'Explore stunning photographs, expedition videos and press releases from the frontlines of polar science.',
     image: 'https://images.unsplash.com/photo-1551415923-a2297c7fda79?w=800&q=80',
-    badge: '2,300+ Media',
+    badge: 'Photos · Films',
     badgeColor: 'text-purple-300 bg-purple-500/10 border-purple-500/20',
   },
   {
@@ -37,7 +37,7 @@ const sections = [
     icon: BookOpen,
     title: 'Learn & Engage',
     desc: 'Science stories, virtual tours, quizzes and classroom kits that bring polar science to life.',
-    image: 'https://images.unsplash.com/photo-1544198365-f5d60b6d8190?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=800&q=80',
     badge: 'Interactive',
     badgeColor: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
   },
@@ -46,7 +46,7 @@ const sections = [
 export default function ExplorePage() {
   return (
     <AppShell>
-      <div className="p-6 max-w-screen-xl">
+      <div>
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex items-center gap-2 text-xs text-[rgba(144,224,239,0.4)] mb-2">

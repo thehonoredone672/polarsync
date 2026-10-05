@@ -1,172 +1,112 @@
 'use client';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
-import {
-  BookOpen, Globe2, HelpCircle, Package, Clock, Users,
-  ArrowRight, GraduationCap, Star
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { BookOpen, Globe2, HelpCircle, Package, ArrowRight, Clock, GraduationCap, MapPin, Award } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { educationItems, EducationItem } from '@/lib/data';
+import { useAppStore } from '@/lib/store';
+import { useT } from '@/lib/i18n';
+import { imgUrl } from '@/lib/format';
+import { EDU_IMG, KITS, QUIZZES, STORIES, TOURS, tr } from '@/lib/education';
+import { ParallaxSection, RevealOnScroll, SectionHeader, SmartImage, TiltCard } from '@/components/ui';
 
-const typeConfig: Record<string, { icon: React.ElementType; label: string; color: string; bg: string; border: string; cta: string }> = {
-  story: {
-    icon: BookOpen, label: 'Science Story', color: 'text-pink-300',
-    bg: 'bg-pink-500/10', border: 'border-pink-500/20 hover:border-pink-400/40',
-    cta: 'Read Story',
-  },
-  tour: {
-    icon: Globe2, label: 'Virtual Tour', color: 'text-teal-300',
-    bg: 'bg-teal-500/10', border: 'border-teal-500/20 hover:border-teal-400/40',
-    cta: 'Take Tour →',
-  },
-  quiz: {
-    icon: HelpCircle, label: 'Quiz', color: 'text-amber-300',
-    bg: 'bg-amber-500/10', border: 'border-amber-500/20 hover:border-amber-400/40',
-    cta: 'Start Quiz →',
-  },
-  kit: {
-    icon: Package, label: 'Educator Kit', color: 'text-violet-300',
-    bg: 'bg-violet-500/10', border: 'border-violet-500/20 hover:border-violet-400/40',
-    cta: 'Download →',
-  },
-};
-
-function EducationCard({ item, index }: { item: EducationItem; index: number }) {
-  const cfg = typeConfig[item.type];
+function BigCard({ href, image, eyebrow, title, desc, meta, cta, tone, index, tall = false }: {
+  href: string; image: string; eyebrow: string; title: string; desc: string; meta?: string; cta: string; tone: string; index: number; tall?: boolean;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08 }}
-      whileHover={{ y: -5 }}
-      className={`glass-card rounded-2xl overflow-hidden group border ${cfg.border} transition-all duration-300`}
-    >
-      <div className="relative h-44 overflow-hidden">
-        <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(2,11,24,0.92)] via-[rgba(2,11,24,0.2)] to-transparent" />
-        <div className="absolute top-3 left-3">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${cfg.bg} border ${cfg.border} ${cfg.color}`}>
-            <cfg.icon size={12} /> {cfg.label}
-          </span>
-        </div>
-        {item.level && (
-          <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-[rgba(0,0,0,0.6)] text-[10px] text-white border border-[rgba(255,255,255,0.1)]">
-            {item.level}
-          </span>
-        )}
-        {item.questions && (
-          <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-[rgba(0,0,0,0.6)] text-[10px] text-white">
-            {item.questions} questions
-          </span>
-        )}
-      </div>
-      <div className="p-4">
-        <h3 className="font-semibold text-[#CAF0F8] text-sm leading-snug mb-1.5 line-clamp-2 group-hover:text-white transition-colors">
-          {item.title}
-        </h3>
-        <p className="text-xs text-[rgba(202,240,248,0.45)] line-clamp-2 mb-3 leading-relaxed">{item.description}</p>
-        <div className="flex items-center justify-between">
-          {item.duration && (
-            <div className="flex items-center gap-1 text-[10px] text-[rgba(144,224,239,0.4)]">
-              <Clock size={10} /> {item.duration}
+    <RevealOnScroll delay={index * 0.08} className="h-full">
+      <TiltCard className="h-full rounded-3xl" max={4}>
+        <Link href={href} className={`glass-panel glass-panel-hover group relative block h-full overflow-hidden rounded-3xl ${tall ? 'min-h-[420px]' : 'min-h-[300px]'}`}>
+          <SmartImage src={image} alt="" width={1000} className="absolute inset-0 h-full w-full object-cover transition-transform duration-[1400ms] group-hover:scale-110" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(2,11,24,0.97)] via-[rgba(2,11,24,0.45)] to-[rgba(2,11,24,0.1)]" />
+          <div className="absolute inset-x-0 bottom-0 p-6">
+            <p className={`mb-2 text-[11px] font-bold uppercase tracking-[0.2em] ${tone}`}>{eyebrow}</p>
+            <h3 className="font-space text-2xl font-bold leading-tight text-white">{title}</h3>
+            <p className="mt-2 line-clamp-2 text-sm text-ice-200">{desc}</p>
+            <div className="mt-4 flex items-center justify-between">
+              {meta && <span className="flex items-center gap-1.5 text-xs text-ice-300"><Clock size={12} aria-hidden />{meta}</span>}
+              <span className="flex items-center gap-1 text-sm font-semibold text-white">{cta} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden /></span>
             </div>
-          )}
-          <button className={`text-xs font-semibold ${cfg.color} hover:opacity-80 transition-opacity`}>
-            {cfg.cta}
-          </button>
-        </div>
-      </div>
-    </motion.div>
+          </div>
+        </Link>
+      </TiltCard>
+    </RevealOnScroll>
   );
 }
 
 export default function EducationPage() {
-  const storyItems = educationItems.filter((i) => i.type === 'story');
-  const tourItems = educationItems.filter((i) => i.type === 'tour');
-  const quizItems = educationItems.filter((i) => i.type === 'quiz');
-  const kitItems = educationItems.filter((i) => i.type === 'kit');
-
-  const sections = [
-    { label: 'Science Stories', icon: BookOpen, items: storyItems, desc: 'Deep-dive narratives on Indian polar science' },
-    { label: 'Virtual Tours', icon: Globe2, items: tourItems, desc: 'Explore research stations from your screen' },
-    { label: 'Quizzes', icon: HelpCircle, items: quizItems, desc: 'Test your polar knowledge' },
-    { label: 'Educator Kits', icon: Package, items: kitItems, desc: 'For teachers & school programs' },
-  ];
+  const t = useT();
+  const lang = useAppStore((s) => s.lang);
+  const low = useAppStore((s) => s.lowBandwidth);
 
   return (
-    <AppShell>
-      <div className="p-6 max-w-screen-xl">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="flex items-center gap-2 text-xs text-[rgba(144,224,239,0.4)] mb-2">
-            <GraduationCap size={12} /> Education & Outreach
+    <AppShell fullBleed>
+      <ParallaxSection image={imgUrl(EDU_IMG.aurora, 2000, low)} height="min-h-[460px] sm:min-h-[540px]" speed={0.3}>
+        <div className="mx-auto flex min-h-[460px] max-w-screen-2xl flex-col items-start justify-end px-4 pb-12 sm:min-h-[540px] sm:px-8">
+          <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.24em] text-cyan-300"><GraduationCap size={14} aria-hidden /> {t('nav.education')} · Outreach</p>
+          <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}
+            className="max-w-4xl font-space text-4xl font-bold uppercase leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl">
+            {t('edu.hero')}
+          </motion.h1>
+          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-4 max-w-2xl text-base text-ice-200 sm:text-lg">{t('edu.subtitle')}</motion.p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/education/stories/story-antarctica" className="btn-primary">{t('edu.readStory')} <ArrowRight size={15} aria-hidden /></Link>
+            <Link href="/education/quiz/quiz-polar" className="btn-secondary"><Award size={15} aria-hidden /> {t('edu.startQuiz')}</Link>
           </div>
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <h1 className="font-space text-3xl font-bold text-gradient-white mb-2">Learn & Engage</h1>
-              <p className="text-sm text-[rgba(202,240,248,0.5)]">
-                Interactive lessons, datasets and resources to bring polar science closer to everyone.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[rgba(0,180,216,0.07)] border border-[rgba(0,180,216,0.15)]">
-                <Users size={14} className="text-[#48CAE4]" />
-                <span className="text-xs font-medium text-[#90E0EF]">12,400+ learners</span>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[rgba(0,180,216,0.07)] border border-[rgba(0,180,216,0.15)]">
-                <Star size={14} className="text-amber-400" />
-                <span className="text-xs font-medium text-[#90E0EF]">4.8 / 5 rating</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* All sections */}
-        <div className="space-y-12">
-          {sections.map((section, si) => (
-            <div key={section.label}>
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="flex items-center justify-between mb-4"
-              >
-                <div className="flex items-center gap-2">
-                  <section.icon size={18} className="text-[#48CAE4]" />
-                  <div>
-                    <h2 className="font-space text-lg font-semibold text-[#CAF0F8]">{section.label}</h2>
-                    <p className="text-xs text-[rgba(144,224,239,0.4)]">{section.desc}</p>
-                  </div>
-                </div>
-                <button className="text-xs text-[#48CAE4] hover:text-[#90E0EF] flex items-center gap-1 transition-colors">
-                  Explore All <ArrowRight size={12} />
-                </button>
-              </motion.div>
-              {section.items.length > 0 ? (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {section.items.map((item, i) => (
-                    <EducationCard key={item.id} item={item} index={i + si * 4} />
-                  ))}
-                  {/* Coming soon card */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="glass-light rounded-2xl border border-[rgba(0,180,216,0.1)] flex flex-col items-center justify-center p-6 text-center min-h-[200px]"
-                  >
-                    <section.icon size={24} className="text-[rgba(0,180,216,0.3)] mb-2" />
-                    <p className="text-xs font-medium text-[rgba(144,224,239,0.4)]">More coming soon</p>
-                    <p className="text-[10px] text-[rgba(144,224,239,0.25)] mt-1">Contribute your content</p>
-                  </motion.div>
-                </div>
-              ) : (
-                <div className="glass-light rounded-2xl border border-[rgba(0,180,216,0.1)] flex items-center justify-center p-10 text-center">
-                  <p className="text-xs text-[rgba(144,224,239,0.4)]">Coming soon</p>
-                </div>
-              )}
-            </div>
-          ))}
         </div>
+      </ParallaxSection>
+
+      <div className="mx-auto max-w-screen-2xl space-y-14 px-4 py-12 sm:px-8">
+        <section aria-labelledby="stories-h">
+          <SectionHeader id="stories-h" icon={BookOpen} title={t('edu.stories')} subtitle={t('edu.storiesDesc')} />
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
+            {STORIES.map((s, i) => (
+              <div key={s.id} className={i === 0 ? 'md:col-span-2 lg:col-span-1 lg:row-span-2' : ''}>
+                <BigCard href={`/education/stories/${s.id}`} image={s.hero} eyebrow={t('type.story')} title={tr(s.title, lang)} desc={tr(s.subtitle, lang)}
+                  meta={`${s.readTime} read`} cta={t('edu.readStory')} tone="text-pink-300" index={i} tall={i === 0} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="tours-h">
+          <SectionHeader id="tours-h" icon={Globe2} title={t('edu.tours')} subtitle={t('edu.toursDesc')} />
+          <div className="grid gap-5 md:grid-cols-2">
+            {TOURS.map((tour, i) => (
+              <BigCard key={tour.id} href={`/education/tour/${tour.id}`} image={tour.image} eyebrow={`${t('type.tour')} · ${tour.hotspots.length} hotspots`}
+                title={tr(tour.title, lang)} desc={tr(tour.intro, lang)} cta={t('edu.takeTour')} tone="text-teal-300" index={i} />
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="quiz-h">
+          <SectionHeader id="quiz-h" icon={HelpCircle} title={t('edu.quizzes')} subtitle={t('edu.quizzesDesc')} />
+          <div className="grid gap-5 md:grid-cols-2">
+            {QUIZZES.map((q, i) => (
+              <BigCard key={q.id} href={`/education/quiz/${q.id}`} image={q.image} eyebrow={`${t('type.quiz')} · ${q.questions.length} questions`}
+                title={tr(q.title, lang)} desc="Instant feedback with explanations, a progress tracker and your Polar Explorer level." cta={t('edu.startQuiz')} tone="text-orange-300" index={i} />
+            ))}
+          </div>
+        </section>
+
+        <section aria-labelledby="kits-h">
+          <SectionHeader id="kits-h" icon={Package} title={t('edu.kits')} subtitle={t('edu.kitsDesc')}
+            action={<Link href="/education/kits" className="flex items-center gap-1 text-xs font-semibold text-cyan-300 hover:text-cyan-100">{t('common.viewAll')} <ArrowRight size={12} aria-hidden /></Link>} />
+          <div className="grid gap-5 md:grid-cols-3">
+            {KITS.map((k, i) => (
+              <BigCard key={k.id} href={`/education/kits#${k.id}`} image={k.image} eyebrow={`${t('type.kit')} · ${k.level}`} title={k.title} desc={k.summary}
+                meta={k.duration} cta={t('edu.openKit')} tone="text-indigo-300" index={i} />
+            ))}
+          </div>
+        </section>
+
+        <RevealOnScroll className="glass-panel flex flex-col items-center gap-4 rounded-3xl p-8 text-center sm:flex-row sm:text-left">
+          <MapPin size={36} className="shrink-0 text-cyan-300" aria-hidden />
+          <div className="flex-1">
+            <h2 className="font-space text-xl font-bold text-ice-50">Every story is connected to real places and research</h2>
+            <p className="mt-1 text-sm text-ice-400">Jump from a story to the station on the map, then to the papers and datasets produced there.</p>
+          </div>
+          <Link href="/explore/map" className="btn-primary shrink-0">{t('nav.map')} <ArrowRight size={15} aria-hidden /></Link>
+        </RevealOnScroll>
       </div>
     </AppShell>
   );

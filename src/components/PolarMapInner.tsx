@@ -1,138 +1,82 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { PolarLocation } from '@/lib/data';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import type { Location } from '@/lib/api';
+import { CATEGORY_HEX } from '@/lib/format';
 
-// Fix Leaflet default icon issue in Next.js
-function fixLeafletIcons() {
-  if (typeof window === 'undefined') return;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const L = require('leaflet');
-  delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+interface Props {
+  locations: Location[];
+  selectedId: string | null;
+  onSelect: (loc: Location) => void;
+  lowBandwidth?: boolean;
+}
+
+function markerIcon(loc: Location, selected: boolean) {
+  const color = CATEGORY_HEX[loc.category] || '#48CAE4';
+  const size = selected ? 34 : 26;
+  return L.divIcon({
+    className: '',
+    html: `
+      <div class="polar-marker" style="position:relative;width:${size}px;height:${size}px">
+        ${selected ? `<span class="polar-marker-pulse" style="background:${color}55"></span>` : ''}
+        <div style="width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+          background:${color}${selected ? '55' : '26'};border:2px solid ${color};box-shadow:0 0 ${selected ? 22 : 12}px ${color}88;
+          display:flex;align-items:center;justify-content:center;">
+          <div style="width:${selected ? 10 : 8}px;height:${selected ? 10 : 8}px;border-radius:50%;background:${color};transform:rotate(45deg)"></div>
+        </div>
+      </div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
   });
 }
 
-const categoryColors: Record<string, string> = {
-  station: '#EF4444',
-  expedition: '#10B981',
-  dataset: '#3B82F6',
-  media: '#8B5CF6',
-  event: '#F59E0B',
-};
-
-interface PolarMapInnerProps {
-  locations: PolarLocation[];
-  selectedLocation: PolarLocation | null;
-  onLocationSelect: (loc: PolarLocation) => void;
-}
-
-export default function PolarMapInner({ locations, selectedLocation, onLocationSelect }: PolarMapInnerProps) {
-  const mapRef = useRef<ReturnType<typeof import('leaflet').map> | null>(null);
-  const containerId = 'polar-leaflet-map';
-  const markersRef = useRef<unknown[]>([]);
+export default function PolarMapInner({ locations, selectedId, onSelect, lowBandwidth }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    fixLeafletIcons();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const L = require('leaflet');
-    require('leaflet/dist/leaflet.css');
-
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-
-    const map = L.map(containerId, {
-      center: [-30, 30],
-      zoom: 2,
-      zoomControl: false,
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, {
+      center: [-10, 40], zoom: 2, minZoom: 2, maxZoom: 9, zoomControl: false, worldCopyJump: true,
+      zoomAnimation: !lowBandwidth, fadeAnimation: !lowBandwidth, keyboard: true,
     });
-
-    // Dark styled tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 18,
+    // Esri World Dark Gray (no API key required), tinted toward the PolarSync navy palette via CSS
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ', maxZoom: 16, className: 'polar-tiles',
     }).addTo(map);
-
-    // Zoom control in bottom-right
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+    L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
     mapRef.current = map;
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(containerRef.current);
+    return () => { ro.disconnect(); map.remove(); mapRef.current = null; markersRef.current.clear(); };
+  }, [lowBandwidth]);
 
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // markers
   useEffect(() => {
-    if (!mapRef.current || typeof window === 'undefined') return;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const L = require('leaflet');
     const map = mapRef.current;
-
-    // Remove old markers
-    markersRef.current.forEach((m: unknown) => (m as ReturnType<typeof L.marker>).remove());
-    markersRef.current = [];
-
+    if (!map) return;
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current.clear();
     locations.forEach((loc) => {
-      const color = categoryColors[loc.category] || '#00B4D8';
-
-      const icon = L.divIcon({
-        className: '',
-        html: `
-          <div style="
-            width: 28px; height: 28px;
-            background: ${color}22;
-            border: 2.5px solid ${color};
-            border-radius: 50% 50% 50% 0;
-            transform: rotate(-45deg);
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 12px ${color}66;
-            cursor: pointer;
-            transition: transform 0.2s;
-          ">
-            <div style="
-              width: 8px; height: 8px;
-              background: ${color};
-              border-radius: 50%;
-              transform: rotate(45deg);
-            "></div>
-          </div>
-        `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 28],
-        popupAnchor: [0, -32],
-      });
-
-      const marker = L.marker([loc.lat, loc.lng], { icon })
+      const m = L.marker([loc.lat, loc.lng], { icon: markerIcon(loc, loc.id === selectedId), title: loc.name, alt: loc.name, keyboard: true, riseOnHover: true })
         .addTo(map)
-        .on('click', () => onLocationSelect(loc));
-
-      markersRef.current.push(marker);
+        .on('click', () => onSelectRef.current(loc));
+      m.bindTooltip(loc.name, { direction: 'top', offset: [0, -26], className: 'polar-tooltip' });
+      markersRef.current.set(loc.id, m);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locations]);
+  }, [locations, selectedId]);
 
-  // Pan to selected
+  // fly to selection
   useEffect(() => {
-    if (selectedLocation && mapRef.current) {
-      mapRef.current.flyTo([selectedLocation.lat, selectedLocation.lng], 5, { duration: 1 });
-    }
-  }, [selectedLocation]);
+    const map = mapRef.current;
+    const loc = locations.find((l) => l.id === selectedId);
+    if (map && loc) map.flyTo([loc.lat, loc.lng], Math.max(map.getZoom(), 5), { duration: lowBandwidth ? 0 : 1.1 });
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
-    <div
-      id={containerId}
-      style={{ width: '100%', height: '100%', minHeight: '400px' }}
-      className="rounded-2xl"
-    />
-  );
+  return <div ref={containerRef} className="h-full w-full" role="application" aria-label="Interactive polar map. Use the location list for keyboard access." />;
 }

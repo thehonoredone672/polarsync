@@ -1,105 +1,104 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
 import {
-  Home, Compass, Map, Search, Database, Image, GraduationCap,
-  Settings, User, ChevronRight, Upload, LayoutDashboard, Shield
+  Home, Compass, Map, Search, Database, Image, GraduationCap, Settings, Upload, LayoutDashboard, Shield, BarChart3, Info,
+  ClipboardCheck, type LucideIcon,
 } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import { useT, type TKey } from '@/lib/i18n';
 
-const sidebarItems = [
-  { icon: Home, label: 'Home', href: '/' },
-  { icon: Compass, label: 'Explore', href: '/explore' },
-  { icon: Map, label: 'Polar Map', href: '/explore/map' },
-  { icon: Search, label: 'Search', href: '/search' },
-  { icon: Database, label: 'Repository', href: '/repository' },
-  { icon: Image, label: 'Media Hub', href: '/media' },
-  { icon: GraduationCap, label: 'Education', href: '/education' },
+type Item = { icon: LucideIcon; key: TKey; href: string };
+
+const mainItems: Item[] = [
+  { icon: Home, key: 'nav.home', href: '/' },
+  { icon: Compass, key: 'nav.explore', href: '/explore' },
+  { icon: Map, key: 'nav.map', href: '/explore/map' },
+  { icon: Search, key: 'nav.search', href: '/search' },
+  { icon: Database, key: 'nav.repository', href: '/repository' },
+  { icon: Image, key: 'nav.media', href: '/media' },
+  { icon: GraduationCap, key: 'nav.education', href: '/education' },
 ];
 
-const bottomItems = [
-  { icon: LayoutDashboard, label: 'My Dashboard', href: '/dashboard' },
-  { icon: Upload, label: 'Upload', href: '/contribute' },
-  { icon: Shield, label: 'Admin', href: '/admin' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+const workItems: Item[] = [
+  { icon: LayoutDashboard, key: 'nav.dashboard', href: '/dashboard' },
+  { icon: Upload, key: 'nav.upload', href: '/contribute' },
 ];
 
-interface SidebarProps {
-  collapsed?: boolean;
+const adminItems: Item[] = [
+  { icon: Shield, key: 'admin.title', href: '/admin' },
+  { icon: ClipboardCheck, key: 'nav.review', href: '/admin/review' },
+  { icon: BarChart3, key: 'nav.analytics', href: '/analytics' },
+];
+
+const footerItems: Item[] = [
+  { icon: Settings, key: 'nav.settings', href: '/settings' },
+  { icon: Info, key: 'nav.about', href: '/about' },
+];
+
+export function mobileNavGroups(role?: string): Item[][] {
+  // Admin tools are always listed so judges can find them; pages gate access.
+  return [mainItems, workItems, role === 'contributor' ? footerItems : [...adminItems, ...footerItems]];
 }
 
-export default function Sidebar({ collapsed = false }: SidebarProps) {
-  const pathname = usePathname();
+function NavItem({ item, active, collapsed }: { item: Item; active: boolean; collapsed: boolean }) {
+  const t = useT();
+  return (
+    <Link href={item.href} aria-current={active ? 'page' : undefined} title={collapsed ? t(item.key) : undefined}
+      className={`sidebar-item group ${active ? 'active' : ''} ${collapsed ? 'justify-center px-0' : ''}`}>
+      <item.icon size={17} aria-hidden className={active ? 'text-cyan-300' : 'text-ice-400 group-hover:text-ice-100'} />
+      {!collapsed && <span className="flex-1 truncate">{t(item.key)}</span>}
+      {collapsed && <span className="sr-only">{t(item.key)}</span>}
+    </Link>
+  );
+}
 
+function Section({ label, items, collapsed, isActive }: { label?: string; items: Item[]; collapsed: boolean; isActive: (href: string) => boolean }) {
+  return (
+    <div className="flex flex-col gap-0.5 px-2">
+      {label && !collapsed && <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ice-500">{label}</p>}
+      {label && collapsed && <div className="mx-3 my-2 polar-divider" />}
+      {items.map((i) => <NavItem key={i.href} item={i} active={isActive(i.href)} collapsed={collapsed} />)}
+    </div>
+  );
+}
+
+export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
+  const pathname = usePathname();
+  const user = useAppStore((s) => s.user);
+  const t = useT();
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
+    if (href === '/explore') return pathname === '/explore';
+    if (href === '/admin') return pathname === '/admin';
     return pathname.startsWith(href);
   };
-
   return (
-    <aside
-      className={`flex flex-col h-full py-4 transition-all duration-300 ${collapsed ? 'w-[60px]' : 'w-[220px]'}`}
-    >
-      {/* Main Nav */}
-      <div className="flex-1 flex flex-col gap-0.5 px-2">
-        {sidebarItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link key={item.href} href={item.href}>
-              <motion.div
-                whileHover={{ x: collapsed ? 0 : 3 }}
-                className={`sidebar-item ${active ? 'active' : ''} ${collapsed ? 'justify-center px-0' : ''}`}
-              >
-                <item.icon size={18} className={active ? 'text-[#48CAE4]' : 'text-[rgba(144,224,239,0.5)]'} />
-                {!collapsed && (
-                  <span className="flex-1">{item.label}</span>
-                )}
-                {!collapsed && active && (
-                  <ChevronRight size={14} className="text-[#48CAE4] opacity-60" />
-                )}
-              </motion.div>
+    <nav aria-label="Sidebar" className="flex h-full flex-col overflow-y-auto py-2 scrollbar-none">
+      <Section items={mainItems} collapsed={collapsed} isActive={isActive} />
+      <Section label="Workspace" items={workItems} collapsed={collapsed} isActive={isActive} />
+      {user?.role !== 'contributor' && <Section label="Admin" items={adminItems} collapsed={collapsed} isActive={isActive} />}
+      <div className="mt-auto">
+        <Section label=" " items={footerItems} collapsed={collapsed} isActive={isActive} />
+        {!collapsed && user && (
+          <div className="px-3 pt-3">
+            <Link href="/dashboard" className="flex items-center gap-2.5 rounded-xl border border-cyan-400/10 bg-cyan-400/[0.06] p-2.5 transition-colors hover:border-cyan-400/25">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#00B4D8] to-[#0077B6] text-[10px] font-bold text-white">
+                {user.name.replace('Dr. ', '').split(' ').map((p) => p[0]).slice(0, 2).join('')}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-semibold text-ice-100">{user.name}</span>
+                <span className="block text-[10px] capitalize text-ice-500">{user.role}</span>
+              </span>
             </Link>
-          );
-        })}
+          </div>
+        )}
+        {!collapsed && !user && (
+          <div className="px-3 pt-3">
+            <Link href="/login" className="btn-secondary w-full justify-center text-xs">{t('nav.signin')}</Link>
+          </div>
+        )}
       </div>
-
-      {/* Divider */}
-      <div className="mx-3 my-3 polar-divider" />
-
-      {/* Bottom Nav */}
-      <div className="flex flex-col gap-0.5 px-2">
-        {bottomItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link key={item.href} href={item.href}>
-              <motion.div
-                whileHover={{ x: collapsed ? 0 : 3 }}
-                className={`sidebar-item ${active ? 'active' : ''} ${collapsed ? 'justify-center px-0' : ''}`}
-              >
-                <item.icon size={18} className={active ? 'text-[#48CAE4]' : 'text-[rgba(144,224,239,0.5)]'} />
-                {!collapsed && <span className="flex-1">{item.label}</span>}
-              </motion.div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* User Profile at bottom */}
-      {!collapsed && (
-        <div className="px-3 pt-3">
-          <Link href="/dashboard">
-            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[rgba(0,180,216,0.07)] border border-[rgba(0,180,216,0.12)] hover:border-[rgba(0,180,216,0.25)] transition-all cursor-pointer">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#00B4D8] to-[#0077B6] flex items-center justify-center text-xs font-bold shrink-0">
-                A
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#CAF0F8] truncate">Alex Johnson</p>
-                <p className="text-[10px] text-[rgba(144,224,239,0.5)]">Contributor</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      )}
-    </aside>
+    </nav>
   );
 }
